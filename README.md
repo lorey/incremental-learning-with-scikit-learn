@@ -4,14 +4,19 @@ This repo implements incremental learning with scikit-learn
 by using a sample dataset containing a concept drift,
 i.e. a target variable that changes its meaning over time.
 
-I used it to understand the effects of `partial_fit`
-with respect to both fitting time and quality.
+### Scenario
 
-Summary:
+Users choose items they like. While they reject everything in the beginning `f(g)=0`,
+a regular pattern emerges over time `f(g)=-x`.
 
-- doing a partial_fit on all known data over time converges quickly and is fast (`partial_all`).
-- doing a partial_fit on each batch instead of all known data is quickest, but slow to converge (`partial_step`).
-- fitting on all known samples all the time obviously yields the best results but is computationally 5x more expensive than continuing training with a partial fit on all data (`full_all`)
-- doing a full fit for each step individually does not make sense as you would only train on most recent data only and throw away previous examples. Interestingly, this takes almost as long as fitting on all data each time (`full_step`)
+I used this sample to understand the effects of `partial_fit`
+with respect to both fitting time and quality of the training.
+
+### Methods
+
+- `partial_all`: partial_fit on all data until this point
+- `partial_step`: partial_fit on batch data
+- `full_step`: regular fit on batch data (ignores all previous samples!)
+- `full_all`: regular fit on all data until this point
 
 PS: Please be aware that I have no idea what I'm doing.

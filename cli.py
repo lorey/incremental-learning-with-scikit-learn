@@ -29,7 +29,7 @@ def f_then_g(row, last_index_f):
         return row["g"]
 
 
-def cli(sample_count=10_000, step_size=100, concept_drift_after=0.1):
+def cli(sample_count=10_000, step_size=10, concept_drift_after=0.1):
     # generate the dataset containing the concept drift
     df = get_training_df(sample_count, concept_drift_after)
     logging.info("created the training set")
@@ -46,6 +46,7 @@ def cli(sample_count=10_000, step_size=100, concept_drift_after=0.1):
         start_time = datetime.utcnow()
         quality_over_time = []
 
+        # train a regressor continuously on the 'evolving' dataset
         for regressor in generate_regressors(df, fit_type, train_on, step_size):
             # mse on full set (should be test-set, I know)
             mse = mean_squared_error(df["f_then_g"], regressor.predict(df[["x"]]))
@@ -83,7 +84,9 @@ def generate_regressors(df, fit_type, train_on, step_size):
             regressor.fit(df_train[["x"]], df_train["f_then_g"])
         logging.info(f"performed fit ({fit_type=})")
 
+        # yield regressor for evaluation purposes
         yield regressor
+
     logging.info("training set has now been fitted with all steps")
 
     logging.info("performing partial fits on the full dataset, just because")
