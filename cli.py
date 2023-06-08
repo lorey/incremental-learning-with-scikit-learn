@@ -43,8 +43,8 @@ def cli(sample_count=10_000, step_size=100, concept_drift_after=0.1):
     regressor = MLPRegressor(hidden_layer_sizes=(10,), max_iter=10_000)
     for i in range(step_size, sample_count + 1, step_size):
         # copying here is essential to really remove other samples
-        df_train = pd.DataFrame(df[["x", "f_then_g"]].iloc[:i])
-        logging.info("created the training set for the current step")
+        df_train = pd.DataFrame(df[["x", "f_then_g"]].iloc[i - step_size : i])
+        logging.info(f"created the training set for the current step ({i=})")
 
         # fit the regressor
         regressor.partial_fit(df_train[["x"]], df_train["f_then_g"])
@@ -55,9 +55,7 @@ def cli(sample_count=10_000, step_size=100, concept_drift_after=0.1):
         logging.info(f"current fit ({i=}): {mse}")
 
         # test prediction on select samples
-        df_sample = pd.DataFrame({"x": [1, 10, 100, 1000, 10000]})
-        df_sample["f_then_g_pred"] = pd.Series(regressor.predict(df_sample))
-        print(df_sample)
+        print_sample_prediction(regressor)
 
         print()
     logging.info("training set has now been fitted completely once")
@@ -65,6 +63,9 @@ def cli(sample_count=10_000, step_size=100, concept_drift_after=0.1):
     logging.info("performing partial fits on the full dataset, just because")
     for i in range(100):
         regressor.partial_fit(df[["x"]], df["f_then_g"])
+        if i % 10 == 0:
+            print(f"sample prediction ({i=})")
+            print_sample_prediction(regressor)
 
     mse = mean_squared_error(df["f_then_g"], regressor.predict(df[["x"]]))
     print(f"final mse: {mse}")
@@ -72,6 +73,12 @@ def cli(sample_count=10_000, step_size=100, concept_drift_after=0.1):
     end_time = datetime.utcnow()
     took = end_time - start_time
     print(took)
+
+
+def print_sample_prediction(regressor):
+    df_sample = pd.DataFrame({"x": [1, 10, 100, 1000, 10000]})
+    df_sample["f_then_g_pred"] = pd.Series(regressor.predict(df_sample))
+    print(df_sample)
 
 
 def get_training_df(sample_count, concept_drift_after=0.5):
