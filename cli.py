@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from itertools import combinations, product
 
 import pandas as pd
 from sklearn.metrics import mean_squared_error
@@ -38,41 +39,57 @@ def cli(sample_count=10_000, step_size=100, concept_drift_after=0.1):
     )
     print(df)
 
-    start_time = datetime.utcnow()
+    train_ons = ["step", "all"]
+    fit_types = ["partial", "full"]
 
-    regressor = MLPRegressor(hidden_layer_sizes=(10,), max_iter=10_000)
-    for i in range(step_size, sample_count + 1, step_size):
+    for train_on, fit_type in product(train_ons, fit_types):
+        start_time = datetime.utcnow()
+        quality_over_time = []
+
+        for regressor in generate_regressors(df, fit_type, train_on, step_size):
+            # mse on full set (should be test-set, I know)
+            mse = mean_squared_error(df["f_then_g"], regressor.predict(df[["x"]]))
+            logging.info(f"current fit: {mse}")
+
+            quality_over_time.append((datetime.utcnow() - start_time, mse))
+
+            # test prediction on select samples
+            print_sample_prediction(regressor)
+
+            mse = mean_squared_error(df["f_then_g"], regressor.predict(df[["x"]]))
+            print(f"final mse: {mse}")
+
+        df_evolution = pd.DataFrame(quality_over_time, columns=["time", "mse"])
+        df_evolution.to_csv(f"{fit_type}_{train_on}.csv")
+
+
+def generate_regressors(df, fit_type, train_on, step_size):
+    regressor = MLPRegressor(hidden_layer_sizes=(10,), max_iter=1_000)
+    for i in range(step_size, len(df) + 1, step_size):
         # copying here is essential to really remove other samples
-        df_train = pd.DataFrame(df[["x", "f_then_g"]].iloc[i - step_size : i])
+        if train_on == "step":
+            df_train = pd.DataFrame(df[["x", "f_then_g"]].iloc[i - step_size : i])
+        elif train_on == "all":
+            df_train = pd.DataFrame(df[["x", "f_then_g"]].iloc[:i])
+        else:
+            raise RuntimeError()
+
         logging.info(f"created the training set for the current step ({i=})")
 
         # fit the regressor
-        regressor.partial_fit(df_train[["x"]], df_train["f_then_g"])
-        logging.info("performed partial fit")
+        if fit_type == "partial":
+            regressor.partial_fit(df_train[["x"]], df_train["f_then_g"])
+        elif fit_type == "full":
+            regressor.fit(df_train[["x"]], df_train["f_then_g"])
+        logging.info(f"performed fit ({fit_type=})")
 
-        # mse on full set (should be test-set, I know)
-        mse = mean_squared_error(df["f_then_g"], regressor.predict(df[["x"]]))
-        logging.info(f"current fit ({i=}): {mse}")
-
-        # test prediction on select samples
-        print_sample_prediction(regressor)
-
-        print()
-    logging.info("training set has now been fitted completely once")
+        yield regressor
+    logging.info("training set has now been fitted with all steps")
 
     logging.info("performing partial fits on the full dataset, just because")
     for i in range(100):
         regressor.partial_fit(df[["x"]], df["f_then_g"])
-        if i % 10 == 0:
-            print(f"sample prediction ({i=})")
-            print_sample_prediction(regressor)
-
-    mse = mean_squared_error(df["f_then_g"], regressor.predict(df[["x"]]))
-    print(f"final mse: {mse}")
-
-    end_time = datetime.utcnow()
-    took = end_time - start_time
-    print(took)
+        yield regressor
 
 
 def print_sample_prediction(regressor):
